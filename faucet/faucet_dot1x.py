@@ -209,7 +209,31 @@ class FaucetDot1x:
 
         flowmods.extend(self._add_unauthenticated_flowmod(dot1x_port, valve))
 
+        if dot1x_port.dot1x_mab:
+            self.logger.info("Port % is using Mac Auth Bypass", dot1x_port.number)
+            # TODO restrict this more to only the DHCP requests and place in an if MAB
+            flowmods.append(self.create_mab_flow(dp_id, dot1x_port, nfv_sw_port, valve))
         return flowmods
+
+    def create_mab_flow(self, dp_id, dot1x_port, nfv_sw_port, valve):
+        """Creates a flow that mirrors UDP packets from port 68 (DHCP) from
+        the supplicant to the nfv port
+
+        Args:
+            dp_id (int):
+            dot1x_port (Port):
+            nfv_sw_port (Port):
+            valve (Valve):
+
+        Returns:
+            list
+        """
+        acl_manager = valve.acl_manager
+        if dot1x_port.running():
+            valve_index = self.dp_id_to_valve_index[dp_id]
+            mac = get_mac_str(valve_index, dot1x_port.number)
+            return acl_manager.create_mab_flow(dot1x_port.number, nfv_sw_port.number, mac)
+        return []
 
     def create_flow_pair(self, dp_id, dot1x_port, nfv_sw_port, valve):
         """Creates the pair of flows that redirects the eapol packets to/from
@@ -308,7 +332,6 @@ class FaucetDot1x:
             self._del_unauthenticated_flowmod(dot1x_port, valve))
         flowmods.extend(
             self._add_authenticated_flowmod(dot1x_port, valve, mac_str, vlan_name))
-
         return flowmods
 
     def _add_authenticated_flowmod(self, dot1x_port, valve, mac_str, vlan_name):
@@ -324,8 +347,8 @@ class FaucetDot1x:
             flowmods.extend(acl_manager.add_authed_mac(port_num, mac_str))
 
         if vlan_name:
+            # TODO Replace with call to acl_manager
             flowmods.extend(valve.add_dot1x_native_vlan(port_num, mac_str, vlan_name))
-
         return flowmods
 
     def _del_authenticated_flowmod(self, dot1x_port, valve, mac_str):
