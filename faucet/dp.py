@@ -1069,12 +1069,13 @@ configuration.
                         resolved.append(acl)
 
                 if port.dot1x_acl:
-                    if self.dot1x.get('noauth_acl'):
+                    # Place list of dotx_assigned resolved acls here.with the
+                    if self.acls.get(self.dot1x.get('noauth_acl'), None):
                         noauth_acl = self.dot1x.get('noauth_acl')
                         resolve_acl(noauth_acl, port_num=port.number)
                         resolved.append(noauth_acl)
 
-                    if self.dot1x.get('auth_acl'):
+                    if self.acls.get(self.dot1x.get('auth_acl'), None):
                         auth_acl = self.dot1x.get('auth_acl')
                         resolve_acl(auth_acl, port_num=port.number)
                         resolved.append(auth_acl)

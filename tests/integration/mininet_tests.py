@@ -183,6 +183,15 @@ class Faucet8021XBaseTest(FaucetTest):
     SESSION_TIMEOUT = 3600
     LOG_LEVEL = 'DEBUG'
 
+    DOT1X_CONFIG_VALUES = {}
+    CONFIG_DEFAULTS = {
+        "DOT1X_AUTH_ACL": "None",
+        "DOT1X_NOAUTH_ACL": "None",
+        "PORT_DOT1X_ACL": "False",
+        "ACL_DOT1X_ASSIGNED": "False",
+        "PORT_DOT1X_MAB": "False",
+    }
+
     CONFIG_GLOBAL = """
 vlans:
     100:
@@ -196,22 +205,44 @@ vlans:
             radius_ip: 127.0.0.1
             radius_port: RADIUS_PORT
             radius_secret: SECRET
+            auth_acl: {DOT1X_AUTH_ACL}
+            noauth_acl: {DOT1X_NOAUTH_ACL}
         interfaces:
             %(port_1)d:
+                name: b1
+                description: "b1"
                 native_vlan: 100
                 # 802.1x client.
                 dot1x: True
+                dot1x_acl: {PORT_DOT1X_ACL}
+                dot1x_mab: {PORT_DOT1X_MAB}
             %(port_2)d:
+                name: b2
+                description: "b2"
                 native_vlan: 100
                 # 802.1X client.
                 dot1x: True
+                dot1x_acl: {PORT_DOT1X_ACL}
+                dot1x_mab: {PORT_DOT1X_MAB}
             %(port_3)d:
+                name: b3
+                description: "b3"
                 native_vlan: 100
                 # ping host.
             %(port_4)d:
+                name: b4
+                description: "b4"
                 native_vlan: 100
                 # "NFV host - interface used by controller."
-"""
+        """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.CONFIG_DEFAULTS.update(cls.DOT1X_CONFIG_VALUES)
+
+        cls.CONFIG = cls.CONFIG.format(**cls.CONFIG_DEFAULTS)
+        cls.CONFIG_GLOBAL = cls.CONFIG_GLOBAL.format(**cls.CONFIG_DEFAULTS)
+        super(Faucet8021XBaseTest, cls).setUpClass()
 
     wpasupplicant_conf_1 = """
 ap_scan=0
@@ -852,12 +883,26 @@ class Faucet8021XConfigReloadTest(Faucet8021XBaseTest):
 class Faucet8021XCustomACLLoginTest(Faucet8021XBaseTest):
     """Ensure that 8021X Port ACLs Work before and after Login"""
 
+    DOT1X_EXPECTED_EVENTS = [
+        {'ENABLED': {}},
+        {'PORT_UP': {'port': 'port_1', 'port_type': 'supplicant'}},
+        {'PORT_UP': {'port': 'port_4', 'port_type': 'nfv'}},
+        {'AUTHENTICATION': {'port': 'port_1', 'eth_src': 'HOST1_MAC', 'status': 'success'}},
+    ]
+
+    DOT1X_CONFIG_VALUES = {
+        "DOT1X_AUTH_ACL": "accept_acl",
+        "DOT1X_NOAUTH_ACL": "deny_acl",
+        "PORT_DOT1X_ACL": "True",
+    }
+
     CONFIG_GLOBAL = """
 vlans:
     100:
         description: "untagged"
 acls:
-    auth_acl:
+    accept_acl:
+        rules:
         - rule:
             dl_type: 0x800      # Allow ICMP / IPv4
             ip_proto: 1
@@ -867,7 +912,8 @@ acls:
             dl_type: 0x0806     # ARP Packets
             actions:
                 allow: True
-    noauth_acl:
+    deny_acl:
+        rules:
         - rule:
             dl_type: 0x800      # Deny ICMP / IPv4
             ip_proto: 1
@@ -877,47 +923,10 @@ acls:
             dl_type: 0x0806     # ARP Packets
             actions:
                 allow: True
-    """
+        """
 
-    CONFIG = """
-        dot1x:
-            nfv_intf: NFV_INTF
-            nfv_sw_port: %(port_4)d
-            radius_ip: 127.0.0.1
-            radius_port: RADIUS_PORT
-            radius_secret: SECRET
-            auth_acl: auth_acl
-            noauth_acl: noauth_acl
-        interfaces:
-            %(port_1)d:
-                name: b1
-                description: "b1"
-                native_vlan: 100
-                # 802.1x client.
-                dot1x: True
-                dot1x_acl: True
-            %(port_2)d:
-                name: b2
-                description: "b2"
-                native_vlan: 100
-                # 802.1X client.
-                dot1x: True
-                dot1x_acl: True
-            %(port_3)d:
-                name: b3
-                description: "b3"
-                native_vlan: 100
-                # ping host.
-            %(port_4)d:
-                name: b4
-                description: "b4"
-
-                native_vlan: 100
-                # "NFV host - interface used by controller."
-    """
 
     def test_untagged(self):
-        # Ping allowed before and after login
         port_no1 = self.port_map['port_1']
 
         self.one_ipv4_ping(self.eapol1_host, self.ping_host.IP(),
@@ -925,17 +934,27 @@ acls:
 
         tcpdump_txt_1 = self.try_8021x(
             self.eapol1_host, port_no1, self.wpasupplicant_conf_1, and_logoff=False)
+
         self.assertIn('Success', tcpdump_txt_1)
 
         self.one_ipv4_ping(self.eapol1_host, self.ping_host.IP(),
                            require_host_learned=False, expected_result=True)
 
 
-class Faucet8021XCustomACLLogoutTest(Faucet8021XCustomACLLoginTest):
+class Faucet8021XCustomACLLogoffTest(Faucet8021XCustomACLLoginTest):
     """Ensure that 8021X Port ACLs Work before and after Logout"""
+
+    DOT1X_EXPECTED_EVENTS = [
+        {'ENABLED': {}},
+        {'PORT_UP': {'port': 'port_1', 'port_type': 'supplicant'}},
+        {'PORT_UP': {'port': 'port_4', 'port_type': 'nfv'}},
+        {'AUTHENTICATION': {'port': 'port_1', 'eth_src': 'HOST1_MAC', 'status': 'success'}},
+        {'AUTHENTICATION': {'port': 'port_1', 'eth_src': 'HOST1_MAC', 'status': 'logoff'}},
+    ]
 
     def test_untagged(self):
         port_no1 = self.port_map['port_1']
+        port_labels1 = self.port_labels(port_no1)
 
         self.one_ipv4_ping(self.eapol1_host, self.ping_host.IP(),
                            require_host_learned=False, expected_result=False)
@@ -945,45 +964,30 @@ class Faucet8021XCustomACLLogoutTest(Faucet8021XCustomACLLoginTest):
 
         self.assertIn('Success', tcpdump_txt_1)
         self.assertIn('logoff', tcpdump_txt_1)
+        self.assertEqual(
+            1,
+            self.scrape_prometheus_var('port_dot1x_success_total', labels=port_labels1, default=0))
+        self.assertEqual(
+            1,
+            self.scrape_prometheus_var('port_dot1x_logoff_total', labels=port_labels1, default=0))
 
         self.one_ipv4_ping(self.eapol1_host, self.ping_host.IP(),
                            require_host_learned=False, expected_result=False)
 
 
-class Faucet8021XMABTest(Faucet8021XSuccessTest):
+class Faucet8021XMABTest(Faucet8021XBaseTest):
     """Ensure that 802.1x Port Supports Mac Auth Bypass"""
-    DOT1X_EXPECTED_EVENTS = [{'ENABLED': {}},
-                             {'PORT_UP': {'port': 'port_1', 'port_type': 'supplicant'}},
-                             {'PORT_UP': {'port': 'port_2', 'port_type': 'supplicant'}},
-                             {'PORT_UP': {'port': 'port_4', 'port_type': 'nfv'}},
-                             {'AUTHENTICATION': {'port': 'port_1', 'eth_src': 'HOST1_MAC',
-                                                 'status': 'success'}},
-                             ]
-    #TODO Add Variables to Faucet Dot1x Configs as they're mostly the same copy pasted
-    CONFIG = """
-        dot1x:
-            nfv_intf: NFV_INTF
-            nfv_sw_port: %(port_4)d
-            radius_ip: 127.0.0.1
-            radius_port: RADIUS_PORT
-            radius_secret: SECRET
-        interfaces:
-            %(port_1)d:
-                native_vlan: 100
-                # 802.1x client.
-                dot1x: True
-                dot1x_mab: True
-            %(port_2)d:
-                native_vlan: 100
-                # 802.1X client.
-                dot1x: True
-            %(port_3)d:
-                native_vlan: 100
-                # ping host.
-            %(port_4)d:
-                native_vlan: 100
-                # "NFV host - interface used by controller."
-    """
+    DOT1X_EXPECTED_EVENTS = [
+        {'ENABLED': {}},
+        {'PORT_UP': {'port': 'port_1', 'port_type': 'supplicant'}},
+        {'PORT_UP': {'port': 'port_2', 'port_type': 'supplicant'}},
+        {'PORT_UP': {'port': 'port_4', 'port_type': 'nfv'}},
+        {'AUTHENTICATION': {'port': 'port_1', 'eth_src': 'HOST1_MAC', 'status': 'success'}},
+    ]
+
+    DOT1X_CONFIG_VALUES = {
+        "PORT_DOT1X_MAB": "True",
+    }
 
     def start_freeradius(self):
         # Add the host mac address to the FreeRADIUS config
