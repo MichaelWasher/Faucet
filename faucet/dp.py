@@ -298,7 +298,6 @@ configuration.
         self.strict_packet_in_cookie = None
         self.multi_out = None
         self.idle_dst = None
-
         self.acls = {}
         self.vlans = {}
         self.ports = {}
@@ -314,7 +313,6 @@ configuration.
         self.table_sizes = {}
         self.dyn_up_port_nos = set()
         self.has_externals = None
-
         #tunnel_id: int
         #   ID of the tunnel, for now this will be the VLAN ID
         #acl: ACL object
@@ -383,15 +381,11 @@ configuration.
         all_acls = {}
         if self.dot1x:
             # NOTE: All acl's are added to the acl list and then referred to later by ports
-            all_acls['port_acl'] = [PORT_ACL_8021X]
+            acls = [PORT_ACL_8021X, self.acls.get(self.dot1x.get('auth_acl'), None), self.acls.get(
+                self.dot1x.get('noauth_acl'), None)]
 
-            auth_acl = self.acls.get(self.dot1x.get('auth_acl'))
-            noauth_acl = self.acls.get(self.dot1x.get('noauth_acl'))
-
-            if auth_acl:
-                all_acls['port_acl'].append(auth_acl)
-            if noauth_acl:
-                all_acls['port_acl'].append(noauth_acl)
+            acls.extend([acl for acl_name, acl in self.acls.items() if acl.dot1x_assigned])
+            all_acls['port_acl'] = [acl for acl in acls if acl is not None]
 
         for vlan in self.vlans.values():
             if vlan.acls_in:
@@ -1059,17 +1053,29 @@ configuration.
                     vlan.acls_out = acls
                     verify_acl_exact_match(acls)
             for port in self.ports.values():
-                acls = []
                 if port.acls_in:
+                    acls = []
                     test_config_condition(self.dp_acls, (
                         'dataplane ACLs cannot be used with port ACLs.'))
                     for acl in port.acls_in:
                         resolve_acl(acl, port_num=port.number)
                         acls.append(self.acls[acl])
                         resolved.append(acl)
+                    port.acls_in = acls
+                    verify_acl_exact_match(acls)
 
-                if port.dot1x_acl:
+                if port.dot1x_dyn_acl:
                     # Place list of dotx_assigned resolved acls here.with the
+
+                    dot1x_acls = [acl_name for acl_name, acl in self.acls.items()
+                                  if acl.dot1x_assigned]
+                    for acl_name in dot1x_acls:
+                        resolve_acl(acl_name, port_num=port.number)
+                        resolved.append(acl_name)
+
+                # All other ACLs that are allowed to be used by dot1x
+                # TODO Rewrite be cleaner and seem more pythonic
+                if port.dot1x_acl:
                     if self.acls.get(self.dot1x.get('noauth_acl'), None):
                         noauth_acl = self.dot1x.get('noauth_acl')
                         resolve_acl(noauth_acl, port_num=port.number)
@@ -1080,8 +1086,6 @@ configuration.
                         resolve_acl(auth_acl, port_num=port.number)
                         resolved.append(auth_acl)
 
-                port.acls_in = acls
-                verify_acl_exact_match(acls)
             if self.dp_acls:
                 acls = []
                 for acl in self.acls:
