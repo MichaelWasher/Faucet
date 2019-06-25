@@ -959,7 +959,7 @@ class Faucet8021XMABTest(Faucet8021XSuccessTest):
                              {'AUTHENTICATION': {'port': 'port_1', 'eth_src': 'HOST1_MAC',
                                                  'status': 'success'}},
                              ]
-    #TODO Add Variables to Faucet Dot1x Configs as they're mostly the same copy pasted
+
     CONFIG = """
         dot1x:
             nfv_intf: NFV_INTF
@@ -998,6 +998,9 @@ class Faucet8021XMABTest(Faucet8021XSuccessTest):
         return host.cmd(timeout_cmd + " " + dhclient_cmd, verbose=True)
 
     def test_untagged(self):
+        port_no1 = self.port_map['port_1']
+        port_labels1 = self.port_labels(port_no1)
+
         timeout = 10
         self.one_ipv4_ping(self.eapol1_host, self.ping_host.IP(),
                            require_host_learned=False, expected_result=False)
@@ -1009,6 +1012,9 @@ class Faucet8021XMABTest(Faucet8021XSuccessTest):
         # Second ping pass
         self.one_ipv4_ping(self.eapol1_host, self.ping_host.IP(),
                            require_host_learned=False, expected_result=True)
+        self.assertEqual(
+            1,
+            self.scrape_prometheus_var('port_dot1x_success_total', labels=port_labels1, default=0))
 
 
 class Faucet8021XVLANTest(Faucet8021XSuccessTest):

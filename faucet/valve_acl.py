@@ -386,7 +386,6 @@ class ValveAclManager(ValveManagerBase):
             ]
         return ofmsgs
 
-    # TODO should probably filter on udp_src 68
     def create_mab_flow(self, port_num, nfv_sw_port_num, mac):
         """Create MAB ACL for sending IP Activity to Chewie NFV
                 Returns flowmods to send all IP traffic to Chewie
@@ -398,7 +397,11 @@ class ValveAclManager(ValveManagerBase):
         return self.port_acl_table.flowmod(
             match=self.port_acl_table.match(
                 in_port=port_num,
-                eth_type=0x0800),
+                eth_type=valve_of.ether.ETH_TYPE_IP,
+                nw_proto=valve_of.inet.IPPROTO_UDP,
+                udp_src=68,
+                udp_dst=67,
+                ),
             priority=self.dot1x_low_priority,
             inst=[valve_of.apply_actions([
                 self.port_acl_table.set_field(eth_dst=mac),
@@ -416,7 +419,11 @@ class ValveAclManager(ValveManagerBase):
         return self.port_acl_table.flowdel(
             match=self.port_acl_table.match(
                 in_port=port_num,
-                eth_type=0x0800),
+                eth_type=valve_of.ether.ETH_TYPE_IP,
+                nw_proto=valve_of.inet.IPPROTO_UDP,
+                udp_src=68,
+                udp_dst=67,
+            ),
             priority=self.dot1x_low_priority,
             inst=[valve_of.apply_actions([
                 self.port_acl_table.set_field(eth_dst=mac),
