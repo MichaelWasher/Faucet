@@ -428,7 +428,7 @@ The output action contains a dictionary with the following elements:
                 rule_conf['actions'] = resolved_actions
 
 
-# TODO: 802.1x steals the port ACL table.
+# NOTE: 802.1x steals the port ACL table.
 PORT_ACL_8021X = ACL(
     'port_acl_8021x', 0,
     {'rules': [{'eth_type': 1, 'eth_src': '01:02:03:04:05:06', 'actions': {

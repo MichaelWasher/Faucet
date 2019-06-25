@@ -106,7 +106,7 @@ class FaucetDot1x:
                                         'port': port_num,
                                         'port_type': port_type}})
 
-    def auth_handler(self, address, port_id, *args, **kwargs):
+    def auth_handler(self, address, port_id, *args, **kwargs):  # pylint: disable=unused-argument
         """Callback for when a successful auth happens."""
         address_str = str(address)
         valve, dot1x_port = self._get_valve_and_port(port_id)
@@ -118,7 +118,6 @@ class FaucetDot1x:
 
         if flowmods:
             self._send_flow_msgs(valve, flowmods)
-
 
     def logoff_handler(self, address, port_id):
         """Callback for when an EAP logoff happens."""
@@ -211,8 +210,8 @@ class FaucetDot1x:
 
         if dot1x_port.dot1x_mab:
             self.logger.info("Port % is using Mac Auth Bypass", dot1x_port.number)
-            # TODO restrict this more to only the DHCP requests and place in an if MAB
             flowmods.append(self.create_mab_flow(dp_id, dot1x_port, nfv_sw_port, valve))
+
         return flowmods
 
     def create_mab_flow(self, dp_id, dot1x_port, nfv_sw_port, valve):

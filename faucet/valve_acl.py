@@ -387,12 +387,15 @@ class ValveAclManager(ValveManagerBase):
         return ofmsgs
 
     def create_mab_flow(self, port_num, nfv_sw_port_num, mac):
-        """Create MAB ACL for sending IP Activity to Chewie NFV
-                Returns flowmods to send all IP traffic to Chewie
+        """
+        Create MAB ACL for sending IP Activity to Chewie NFV
+            Returns flowmods to send all IP traffic to Chewie
+
         Args:
             port_num (int): Number of port in
             nfv_sw_port_num(int): Number of port out
             mac(str): MAC address of the valve/port combo
+
         """
         return self.port_acl_table.flowmod(
             match=self.port_acl_table.match(
@@ -401,7 +404,7 @@ class ValveAclManager(ValveManagerBase):
                 nw_proto=valve_of.inet.IPPROTO_UDP,
                 udp_src=68,
                 udp_dst=67,
-                ),
+            ),
             priority=self.dot1x_low_priority,
             inst=[valve_of.apply_actions([
                 self.port_acl_table.set_field(eth_dst=mac),
@@ -409,13 +412,16 @@ class ValveAclManager(ValveManagerBase):
         )
 
     def del_mab_flow(self, port_num, nfv_sw_port_num, mac):
-        """Remove MAB ACL for sending IP Activity to Chewie NFV
-                  Returns flowmods to send all IP traffic to Chewie
-          Args:
-              port_num (int): Number of port in
-              nfv_sw_port_num(int): Number of port out
-              mac(str): MAC address of the valve/port combo
-          """
+        """
+        Remove MAB ACL for sending IP Activity to Chewie NFV
+            Returns flowmods to send all IP traffic to Chewie
+
+        Args:
+            port_num (int): Number of port in
+            nfv_sw_port_num(int): Number of port out
+            mac(str): MAC address of the valve/port combo
+
+        """
         return self.port_acl_table.flowdel(
             match=self.port_acl_table.match(
                 in_port=port_num,
