@@ -422,7 +422,7 @@ class ValveAclManager(ValveManagerBase):
             mac(str): MAC address of the valve/port combo
 
         """
-        return self.port_acl_table.flowdel(
+        return [self.port_acl_table.flowdel(
             match=self.port_acl_table.match(
                 in_port=port_num,
                 eth_type=valve_of.ether.ETH_TYPE_IP,
@@ -431,10 +431,8 @@ class ValveAclManager(ValveManagerBase):
                 udp_dst=67,
             ),
             priority=self.dot1x_low_priority,
-            inst=[valve_of.apply_actions([
-                self.port_acl_table.set_field(eth_dst=mac),
-                valve_of.output_port(nfv_sw_port_num)])],
-        )
+            strict=True
+        )]
 
     def create_acl_tunnel(self, dp):
         """

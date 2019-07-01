@@ -1618,7 +1618,6 @@ class ValveDot1xMABSmokeTestCase(ValveDot1xSmokeTestCase):
     CONFIG = """
 dps:
     s1:
-        hardware: 'GenericTFM'
 {}
         interfaces:
             p1:

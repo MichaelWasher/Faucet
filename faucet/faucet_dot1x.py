@@ -280,6 +280,7 @@ class FaucetDot1x:
         flowmods.extend(self._del_authenticated_flowmod(dot1x_port, valve, mac))
         flowmods.extend(self._del_unauthenticated_flowmod(dot1x_port, valve))
         # NOTE: The flow_pair are not included in unauthed flowmod
+        flowmods.extend(acl_manager.del_mab_flow(dot1x_port.number, nfv_sw_port.number, mac))
         flowmods.extend(acl_manager.del_dot1x_flow_pair(dot1x_port.number, nfv_sw_port.number, mac))
         return flowmods
 
