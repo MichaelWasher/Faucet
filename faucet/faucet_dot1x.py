@@ -22,7 +22,7 @@ eventlet.monkey_patch()
 
 from ryu.lib import hub  # pylint: disable=wrong-import-position
 from chewie import chewie  # pylint: disable=wrong-import-position
-
+from faucet.valve_util import kill_on_exception
 
 def get_mac_str(valve_index, port_num):
     """Gets the mac address string for the valve/port combo
@@ -38,12 +38,15 @@ def get_mac_str(valve_index, port_num):
     return '00:00:00:%02x:%s' % (valve_index, two_byte_port_num_formatted)
 
 
-class FaucetDot1x:
+class FaucetDot1x:  # pylint: disable=too-many-instance-attributes
     """Wrapper for experimental Chewie 802.1x authenticator."""
 
-    def __init__(self, logger, metrics, send_flow_msgs):
+    exc_logname = None
+
+    def __init__(self, logger, exc_logname, metrics, send_flow_msgs):
         self.logger = logger
         self.metrics = metrics
+        self.exc_logname = exc_logname
         self.mac_to_port = {}  # {"00:00:00:00:00:02" : (valve_0, port_1)}
         self.dp_id_to_valve_index = {}
         self.thread = None
@@ -82,10 +85,10 @@ class FaucetDot1x:
         valve, port = self.mac_to_port[port_id]
         return (valve, port)
 
-    def _get_acls(self, dp):
+    def _get_acls(self, datapath):
         """Returns tuple of acl values"""
-        auth_acl = dp.acls.get(self._auth_acl_name)
-        noauth_acl = dp.acls.get(self._noauth_acl_name)
+        auth_acl = datapath.acls.get(self._auth_acl_name)
+        noauth_acl = datapath.acls.get(self._noauth_acl_name)
         return (auth_acl, noauth_acl)
 
     # Loggin Methods
@@ -100,13 +103,14 @@ class FaucetDot1x:
                                               'eth_src': mac_str,
                                               'status': status}})
 
-    def log_port_event(self, event_type, port_type, valve, port_num):
+    def log_port_event(self, event_type, port_type, valve, port_num):  # pylint: disable=no-self-use
         """Log a dot1x port event"""
         valve.dot1x_event({event_type: {'dp_id': valve.dp.dp_id,
                                         'port': port_num,
                                         'port_type': port_type}})
 
-    def auth_handler(self, address, port_id, *args, **kwargs):
+    @kill_on_exception(exc_logname)
+    def auth_handler(self, address, port_id, *args, **kwargs):  # pylint: disable=unused-argument
         """Callback for when a successful auth happens."""
         address_str = str(address)
         valve, dot1x_port = self._get_valve_and_port(port_id)
@@ -119,7 +123,7 @@ class FaucetDot1x:
         if flowmods:
             self._send_flow_msgs(valve, flowmods)
 
-
+    @kill_on_exception(exc_logname)
     def logoff_handler(self, address, port_id):
         """Callback for when an EAP logoff happens."""
         address_str = str(address)
@@ -133,6 +137,7 @@ class FaucetDot1x:
         if flowmods:
             self._send_flow_msgs(valve, flowmods)
 
+    @kill_on_exception(exc_logname)
     def failure_handler(self, address, port_id):
         """Callback for when a EAP failure happens."""
         address_str = str(address)
@@ -319,13 +324,13 @@ class FaucetDot1x:
 
         if dot1x_port.dot1x_acl:
             auth_acl, _ = self._get_acls(valve.dp)
+            self.logger.debug("DOT1X_PRE_ACL: ACL contents: '{0}'".format(str(auth_acl.__dict__)))
             flowmods.extend(acl_manager.add_port_acl(auth_acl, port_num, mac_str))
         else:
             flowmods.extend(acl_manager.add_authed_mac(port_num, mac_str))
 
         if vlan_name:
             flowmods.extend(valve.add_dot1x_native_vlan(port_num, vlan_name))
-
         return flowmods
 
     def _del_authenticated_flowmod(self, dot1x_port, valve, mac_str):
