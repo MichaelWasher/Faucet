@@ -26,6 +26,7 @@ from http.server import HTTPServer
 import scapy.all
 
 import yaml # pytype: disable=pyi-error
+from functools import wraps
 
 from mininet.log import error
 from mininet.util import pmonitor
@@ -62,6 +63,20 @@ CONFIG_TAGGED_BOILER = """
             %(port_4)d:
                 tagged_vlans: [100]
 """
+
+
+def post_test_checks(func):
+    """Decorator function for running pre and post-test checks for Dot1X Tests"""
+    @wraps(func)
+    def _post_test_checks(*args, **kwargs):
+
+        obj = args[0] if len(args) > 0 else None
+
+        if obj is Faucet8021XBaseTest:
+            func(*args, **kwargs)
+            obj.post_test_checks()
+
+    return _post_test_checks
 
 
 class QuietHTTPServer(HTTPServer):
@@ -318,10 +333,11 @@ filter_id_user_deny  Cleartext-Password := "deny_pass"
         self.eapol1_host.cmd('kill -sigint %d' % self.eapol1_tcpdump_pid)
         self._get_controller().cmd('kill %d' % self.nc_pid)
 
+        super(Faucet8021XBaseTest, self).tearDown()
+
+    def post_test_checks(self):
         self.assertGreater(os.path.getsize(self.event_log), 0)
         self.verify_dot1x_events_log()
-
-        super(Faucet8021XBaseTest, self).tearDown()
 
     def verify_dot1x_events_log(self):
 
@@ -560,6 +576,7 @@ class Faucet8021XSuccessTest(Faucet8021XBaseTest):
                              {'AUTHENTICATION': {'port': 'port_2', 'eth_src': 'HOST2_MAC', 'status': 'logoff'}}]
     SESSION_TIMEOUT = 3600
 
+    @post_test_checks
     def test_untagged(self):
         # Log 1 on
         # test 1 good, 2 bad.
@@ -641,6 +658,7 @@ class Faucet8021XFailureTest(Faucet8021XBaseTest):
                              {'PORT_UP': {'port': 'port_4', 'port_type': 'nfv'}},
                              {'AUTHENTICATION': {'port': 'port_1', 'eth_src': 'HOST1_MAC', 'status': 'failure'}}]
 
+    @post_test_checks
     def test_untagged(self):
         port_no = self.port_map['port_1']
         self.wait_8021x_flows(port_no)
@@ -684,6 +702,7 @@ class Faucet8021XPortStatusTest(Faucet8021XBaseTest):
                              {'PORT_DOWN': {'port': 'port_1', 'port_type': 'supplicant'}},
                              {'PORT_UP': {'port': 'port_1', 'port_type': 'supplicant'}}]
 
+    @post_test_checks
     def test_untagged(self):
         port_no1 = self.port_map['port_1']
         port_no2 = self.port_map['port_2']
@@ -731,6 +750,7 @@ class Faucet8021XPortStatusTest(Faucet8021XBaseTest):
 
 class Faucet8021XPortFlapTest(Faucet8021XBaseTest):
 
+    @post_test_checks
     def test_untagged(self):
         port_no1 = self.port_map['port_1']
         port_labels1 = self.port_labels(port_no1)
@@ -763,6 +783,7 @@ class Faucet8021XPortFlapTest(Faucet8021XBaseTest):
 
 class Faucet8021XIdentityOnPortUpTest(Faucet8021XBaseTest):
 
+    @post_test_checks
     def test_untagged(self):
         port_no1 = self.port_map['port_1']
         port_labels1 = self.port_labels(port_no1)
@@ -814,6 +835,7 @@ class Faucet8021XPeriodicReauthTest(Faucet8021XBaseTest):
 
     SESSION_TIMEOUT = 15
 
+    @post_test_checks
     def test_untagged(self):
         port_no1 = self.port_map['port_1']
         port_labels1 = self.port_labels(port_no1)
@@ -837,6 +859,7 @@ class Faucet8021XPeriodicReauthTest(Faucet8021XBaseTest):
 
 class Faucet8021XConfigReloadTest(Faucet8021XBaseTest):
 
+    @post_test_checks
     def test_untagged(self):
         port_no1 = self.port_map['port_1']
         port_no2 = self.port_map['port_2']
@@ -920,6 +943,7 @@ acls:
                 # "NFV host - interface used by controller."
     """
 
+    @post_test_checks
     def test_untagged(self):
         # Ping allowed before and after login
         port_no1 = self.port_map['port_1']
@@ -938,6 +962,7 @@ acls:
 class Faucet8021XCustomACLLogoutTest(Faucet8021XCustomACLLoginTest):
     """Ensure that 8021X Port ACLs Work before and after Logout"""
 
+    @post_test_checks
     def test_untagged(self):
         port_no1 = self.port_map['port_1']
 
@@ -1001,6 +1026,7 @@ class Faucet8021XMABTest(Faucet8021XSuccessTest):
         dhclient_cmd = 'dhclient -d -1 %s' % host.defaultIntf()
         return host.cmd(timeout_cmd + " " + dhclient_cmd, verbose=True)
 
+    @post_test_checks
     def test_untagged(self):
         port_no1 = self.port_map['port_1']
         port_labels1 = self.port_labels(port_no1)
@@ -1075,7 +1101,7 @@ acls:
             dl_type: 0x800      # Deny ICMP / IPv4
             ip_proto: 1
             actions:
-                allow: False
+    allow: False
         - rule:
             dl_type: 0x0806     # ARP Packets
             actions:
@@ -1116,6 +1142,7 @@ acls:
                # "NFV host - interface used by controller."
            """
 
+    @post_test_checks
     def test_untagged(self):
         port_no1 = self.port_map['port_1']
         port_no2 = self.port_map['port_2']
@@ -1162,6 +1189,7 @@ class Faucet8021XDynACLLogoutTest(Faucet8021XDynACLLoginTest):
         {'AUTHENTICATION': {'port': 'port_1', 'eth_src': 'HOST1_MAC', 'status': 'logoff'}}
     ]
 
+    @post_test_checks
     def test_untagged(self):
         port_no1 = self.port_map['port_1']
         port_labels1 = self.port_labels(port_no1)
@@ -1252,6 +1280,7 @@ class Faucet8021XVLANTest(Faucet8021XSuccessTest):
     }
     """
 
+    @post_test_checks
     def test_untagged(self):
         vid = 100 ^ mininet_test_base.OFPVID_PRESENT
         radius_vid1 = (mininet_test_base.MAX_TEST_VID - 1) ^ mininet_test_base.OFPVID_PRESENT
