@@ -19,15 +19,18 @@ while getopts "cdijknrsuxozlp" o $FAUCET_TESTS; do
         n)
             # skip code check
             DEPCHECK=0
+            FAUCET_TESTS=${FAUCET_TESTS//n}
             ;;
         u)
             # skip unit tests
             UNITTESTS=0
+            FAUCET_TESTS=${FAUCET_TESTS//u}
             ;;
         z)
             # Skip pip installer
             echo "Option set to assume environment is set up."
             SKIP_PIP=1
+            FAUCET_TESTS=${FAUCET_TESTS//z}
             ;;
         *)
             ;;
